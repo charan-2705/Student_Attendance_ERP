@@ -31,6 +31,45 @@ router.post('/api/admin/add-student', authenticateToken, async (req, res) => {
   }
 });
 
+router.post('/api/admin/add-faculty', authenticateToken, async (req, res) => {
+  const { name, username, password } = req.body;
+
+  if (!name || !username || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Name, username and password are required."
+    });
+  }
+
+  try {
+    await adminService.addFaculty({
+      name,
+      username,
+      password
+    });
+
+    res.json({
+      success: true,
+      message: "Faculty account created successfully."
+    });
+
+  } catch (err) {
+    console.error("Add faculty error:", err);
+
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({
+        success: false,
+        message: "Username already exists."
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create faculty account."
+    });
+  }
+});
+
 router.delete('/api/admin/student/:id', authenticateToken, async (req, res) => {
   try {
     const [results] = await db.query('SELECT username FROM students WHERE student_id = ?', [req.params.id]);

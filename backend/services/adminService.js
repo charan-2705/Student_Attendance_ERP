@@ -22,6 +22,44 @@ class AdminService {
   await notificationService.broadcastDashboardMutation();
   return true;
 }
+  async addFaculty({ name, username, password }) {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Hash faculty password
+    const securePasswordHash = await bcrypt.hash(password, 10);
+
+    // Create login account
+    await connection.query(
+      `INSERT INTO users 
+       (username, password_hash, role, name, student_id)
+       VALUES (?, ?, 'faculty', ?, NULL)`,
+      [username, securePasswordHash, name]
+    );
+
+    // Create faculty profile
+    await connection.query(
+      `INSERT INTO faculty (username, name)
+       VALUES (?, ?)`,
+      [username, name]
+    );
+
+    await connection.commit();
+
+    await notificationService.broadcastDashboardMutation();
+
+    return true;
+
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+
+  } finally {
+    connection.release();
+  }
+}
 
   async deleteStudent(targetId) {
     const [results] = await db.query('SELECT username FROM students WHERE student_id = ?', [targetId]);
