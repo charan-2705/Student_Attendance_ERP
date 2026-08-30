@@ -81,7 +81,7 @@ if len(faces) == 0:
 # Compare EVERY face
 # against EVERY registered student
 # -----------------------------------
-
+matches=[]
 for face_number, face in enumerate(faces):
 
     test_embedding = face.embedding
@@ -116,3 +116,11 @@ for face_number, face in enumerate(faces):
     print("\nBest match:")
     print("Student:", best_student)
     print("Similarity:", round(best_similarity, 4))
+    matches.append((best_student, face_number + 1, best_similarity))
+print("\n\n========== FINAL MATCHES ==========")
+
+for student_id, face_number, similarity in matches:
+    print(
+        f"Student {student_id} -> Face {face_number} "
+        f"(Similarity: {similarity:.4f})"
+    )
