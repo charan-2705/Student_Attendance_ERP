@@ -5,7 +5,17 @@ from insightface.app import FaceAnalysis
 
 
 # -----------------------------------
-# Load pretrained model
+# Settings
+# -----------------------------------
+
+THRESHOLD = 0.40
+
+EMBEDDING_FOLDER = "embeddings"
+TEST_IMAGE = "../test_images/man-test6.jpeg"
+
+
+# -----------------------------------
+# Load pretrained face recognition model
 # -----------------------------------
 
 app = FaceAnalysis(
@@ -20,21 +30,19 @@ app.prepare(
 
 
 # -----------------------------------
-# Load ALL registered embeddings
+# Load all registered embeddings
 # -----------------------------------
-
-embedding_folder = "embeddings"
 
 registered_embeddings = {}
 
-for filename in os.listdir(embedding_folder):
+for filename in os.listdir(EMBEDDING_FOLDER):
 
     if filename.endswith(".npy"):
 
         student_id = filename.replace(".npy", "")
 
         embedding_path = os.path.join(
-            embedding_folder,
+            EMBEDDING_FOLDER,
             filename
         )
 
@@ -42,13 +50,8 @@ for filename in os.listdir(embedding_folder):
 
         registered_embeddings[student_id] = embedding
 
-        print(
-            f"Loaded student {student_id} "
-            f"with embedding shape {embedding.shape}"
-        )
 
-
-print("\nTotal registered students:",
+print("Total registered students:",
       len(registered_embeddings))
 
 
@@ -56,40 +59,45 @@ print("\nTotal registered students:",
 # Load test image
 # -----------------------------------
 
-image = cv2.imread("../test_images/man-test6.jpeg")
+image = cv2.imread(TEST_IMAGE)
 
 if image is None:
+
     print("Could not load test image")
     exit()
 
 
 # -----------------------------------
-# Detect all faces
+# Detect faces + generate embeddings
 # -----------------------------------
 
 faces = app.get(image)
 
-print("\nFaces detected:", len(faces))
+print("Faces detected:", len(faces))
 
 
 if len(faces) == 0:
+
     print("No faces detected")
     exit()
 
 
 # -----------------------------------
-# Compare EVERY face
-# against EVERY registered student
+# Compare every detected face
 # -----------------------------------
-matches=[]
-for face_number, face in enumerate(faces):
+
+recognized_students = []
+
+
+for face_number, face in enumerate(faces, start=1):
 
     test_embedding = face.embedding
 
-    print(f"\n========== FACE {face_number + 1} ==========")
-
     best_student = None
     best_similarity = -1
+
+
+    # Compare this face with every registered student
 
     for student_id, registered_embedding in registered_embeddings.items():
 
@@ -101,26 +109,38 @@ for face_number, face in enumerate(faces):
             * np.linalg.norm(test_embedding)
         )
 
-        print(
-            f"Student {student_id}: "
-            f"{similarity:.4f}"
-        )
 
-        # Keep highest similarity
         if similarity > best_similarity:
 
             best_similarity = similarity
             best_student = student_id
 
 
-    print("\nBest match:")
-    print("Student:", best_student)
-    print("Similarity:", round(best_similarity, 4))
-    matches.append((best_student, face_number + 1, best_similarity))
-print("\n\n========== FINAL MATCHES ==========")
+    # -----------------------------------
+    # Check threshold
+    # -----------------------------------
 
-for student_id, face_number, similarity in matches:
-    print(
-        f"Student {student_id} -> Face {face_number} "
-        f"(Similarity: {similarity:.4f})"
-    )
+    if best_similarity >= THRESHOLD:
+
+        recognized_students.append(
+            (best_student, face_number)
+        )
+
+
+# -----------------------------------
+# Final output
+# -----------------------------------
+
+print("\n========== RECOGNIZED STUDENTS ==========")
+
+if len(recognized_students) == 0:
+
+    print("No registered students recognized.")
+
+else:
+
+    for student_id, face_number in recognized_students:
+
+        print(
+            f"Student {student_id} - Face {face_number}"
+        )
