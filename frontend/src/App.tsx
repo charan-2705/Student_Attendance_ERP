@@ -11,7 +11,8 @@ import {
   ClipboardList,
   ShieldAlert,
   Eye,
-  EyeOff
+  EyeOff,
+  ScanFace
 } from 'lucide-react';
 
 import { io } from 'socket.io-client';
@@ -27,6 +28,10 @@ const socket = io('http://localhost:5000', {
 });
 
 export default function App() {
+  // =========================================================
+  // SESSION / LOGIN STATE
+  // =========================================================
+
   const [session, setSession] = useState<any>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,12 +39,18 @@ export default function App() {
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [currentView, setCurrentView] = useState('');
 
+  // =========================================================
+  // PASSWORD VISIBILITY
+  // =========================================================
+
   const [showLoginPass, setShowLoginPass] = useState(false);
 
   const [showProfileCurrentPass, setShowProfileCurrentPass] =
     useState(false);
+
   const [showProfileNewPass, setShowProfileNewPass] =
     useState(false);
+
   const [showProfileConfirmPass, setShowProfileConfirmPass] =
     useState(false);
 
@@ -52,6 +63,10 @@ export default function App() {
   const [isUpdatingPassword, setIsUpdatingPassword] =
     useState(false);
 
+  // =========================================================
+  // ERP DATA
+  // =========================================================
+
   const [dbData, setDbData] = useState<any>({
     subjects: [],
     studentRecords: [],
@@ -62,9 +77,9 @@ export default function App() {
     attendanceLogs: []
   });
 
-  // -----------------------------------------
+  // =========================================================
   // LOGOUT
-  // -----------------------------------------
+  // =========================================================
 
   const handleLogout = () => {
     localStorage.removeItem('erp_session_token');
@@ -76,9 +91,9 @@ export default function App() {
     socket.disconnect();
   };
 
-  // -----------------------------------------
-  // RESTORE SESSION
-  // -----------------------------------------
+  // =========================================================
+  // RESTORE PREVIOUS SESSION
+  // =========================================================
 
   useEffect(() => {
     const savedToken =
@@ -88,23 +103,30 @@ export default function App() {
       localStorage.getItem('erp_user_profile');
 
     if (savedToken && savedUser) {
-      const parsedUser = JSON.parse(savedUser);
+      try {
+        const parsedUser = JSON.parse(savedUser);
 
-      setSession(parsedUser);
+        setSession(parsedUser);
 
-      if (parsedUser.role === 'admin') {
-        setCurrentView('admin-addStudent');
-      } else if (parsedUser.role === 'faculty') {
-        setCurrentView('faculty-mark');
-      } else {
-        setCurrentView('student-ai-insights');
+        if (parsedUser.role === 'admin') {
+          setCurrentView('admin-addStudent');
+        } else if (parsedUser.role === 'faculty') {
+          setCurrentView('faculty-mark');
+        } else {
+          setCurrentView('student-ai-insights');
+        }
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+
+        localStorage.removeItem('erp_session_token');
+        localStorage.removeItem('erp_user_profile');
       }
     }
   }, []);
 
-  // -----------------------------------------
+  // =========================================================
   // FETCH ERP DATA
-  // -----------------------------------------
+  // =========================================================
 
   const fetchERPData = () => {
     const currentToken =
@@ -138,52 +160,53 @@ export default function App() {
       });
   };
 
-  // -----------------------------------------
+  // =========================================================
   // SOCKET / REAL-TIME UPDATES
-  // -----------------------------------------
+  // =========================================================
 
   useEffect(() => {
-    if (session) {
-      fetchERPData();
+    if (!session) return;
 
-      socket.connect();
+    fetchERPData();
 
-      socket.emit(
-        'register_user',
-        session.username
-      );
+    socket.connect();
 
-      socket.on(
-        'new_notification',
-        (notification) => {
-          alert(
-            `🔔 [${notification.title}]: ${notification.message}`
-          );
+    // Register current user with socket server
+    socket.emit(
+      'register_user',
+      session.username
+    );
 
-          fetchERPData();
-        }
-      );
+    // New notification
+    socket.on(
+      'new_notification',
+      (notification) => {
+        alert(
+          `🔔 [${notification.title}]: ${notification.message}`
+        );
 
-      socket.on(
-        'dashboard_mutation',
-        (updatedMetrics) => {
-          setDbData(updatedMetrics);
-        }
-      );
-    }
+        fetchERPData();
+      }
+    );
+
+    // Dashboard mutation
+    socket.on(
+      'dashboard_mutation',
+      (updatedMetrics) => {
+        setDbData(updatedMetrics);
+      }
+    );
 
     return () => {
-      socket.off('register_user');
       socket.off('new_notification');
       socket.off('dashboard_mutation');
-
       socket.disconnect();
     };
   }, [session]);
 
-  // -----------------------------------------
+  // =========================================================
   // LOGIN
-  // -----------------------------------------
+  // =========================================================
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,6 +254,10 @@ export default function App() {
           } else {
             setCurrentView('student-ai-insights');
           }
+        } else {
+          setLoginError(
+            data.message || 'Login failed.'
+          );
         }
       })
       .catch(err => {
@@ -238,9 +265,9 @@ export default function App() {
       });
   };
 
-  // -----------------------------------------
+  // =========================================================
   // UPDATE PASSWORD
-  // -----------------------------------------
+  // =========================================================
 
   const handleUpdatePassword = (
     e: React.FormEvent
@@ -288,17 +315,23 @@ export default function App() {
             confirm: ''
           });
         } else {
-          alert(`❌ Error: ${data.message}`);
+          alert(
+            `❌ Error: ${data.message}`
+          );
         }
+      })
+      .catch(err => {
+        console.error(err);
+        alert('❌ Failed to update password.');
       })
       .finally(() => {
         setIsUpdatingPassword(false);
       });
   };
 
-  // -----------------------------------------
+  // =========================================================
   // EXPORT CSV
-  // -----------------------------------------
+  // =========================================================
 
   const exportTableToCSV = (
     datasetType:
@@ -323,6 +356,41 @@ export default function App() {
       );
     }
 
+    if (datasetType === 'attendance') {
+      csvContent +=
+        'Student ID,Subject,Date,Status\n';
+
+      if (dbData.attendanceLogs) {
+        dbData.attendanceLogs.forEach(
+          (a: any) => {
+            csvContent +=
+              `"${a.student_id || a.studentId || ''}",` +
+              `"${a.subject_name || a.subject || ''}",` +
+              `"${a.date || ''}",` +
+              `"${a.status || ''}"\n`;
+          }
+        );
+      }
+    }
+
+    if (datasetType === 'leaves') {
+      csvContent +=
+        'Student ID,Reason,Start Date,End Date,Status\n';
+
+      if (dbData.leaveRequests) {
+        dbData.leaveRequests.forEach(
+          (leave: any) => {
+            csvContent +=
+              `"${leave.studentId || ''}",` +
+              `"${leave.reason || ''}",` +
+              `"${leave.startDate || ''}",` +
+              `"${leave.endDate || ''}",` +
+              `"${leave.status || ''}"\n`;
+          }
+        );
+      }
+    }
+
     const blob = new Blob(
       [csvContent],
       {
@@ -336,7 +404,11 @@ export default function App() {
     const link =
       document.createElement('a');
 
-    link.setAttribute('href', url);
+    link.setAttribute(
+      'href',
+      url
+    );
+
     link.setAttribute(
       'download',
       fileName
@@ -347,11 +419,13 @@ export default function App() {
     link.click();
 
     document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
   };
 
-  // -----------------------------------------
+  // =========================================================
   // LOGIN PAGE
-  // -----------------------------------------
+  // =========================================================
 
   if (!session) {
     return (
@@ -376,7 +450,9 @@ export default function App() {
                     type="text"
                     value={username}
                     onChange={e =>
-                      setUsername(e.target.value)
+                      setUsername(
+                        e.target.value
+                      )
                     }
                     required
                     placeholder="Username"
@@ -393,7 +469,9 @@ export default function App() {
                     }
                     value={password}
                     onChange={e =>
-                      setPassword(e.target.value)
+                      setPassword(
+                        e.target.value
+                      )
                     }
                     required
                     placeholder="Password"
@@ -442,9 +520,9 @@ export default function App() {
     );
   }
 
-  // -----------------------------------------
+  // =========================================================
   // PENDING LEAVE COUNT
-  // -----------------------------------------
+  // =========================================================
 
   const pendingLeavesCount =
     dbData.leaveRequests.filter(
@@ -452,20 +530,21 @@ export default function App() {
         r.status === 'Pending'
     ).length;
 
-  // -----------------------------------------
+  // =========================================================
   // MAIN ERP PAGE
-  // -----------------------------------------
+  // =========================================================
 
   return (
     <div className="erp-container">
 
-      {/* =====================================
+      {/* =====================================================
           SIDEBAR
-      ====================================== */}
+      ====================================================== */}
 
       <aside className="erp-sidebar">
 
         <div className="erp-logo">
+
           <Layers
             size={28}
             color="#a78bfa"
@@ -474,6 +553,7 @@ export default function App() {
           <h2>
             STUDENT PORTAL
           </h2>
+
         </div>
 
         <nav className="erp-nav">
@@ -486,12 +566,13 @@ export default function App() {
             }}
           >
 
-            {/* =================================
+            {/* =================================================
                 STUDENT MENU
-            ================================= */}
+            ================================================= */}
 
             {session.role === 'student' && (
               <>
+
                 <button
                   className={
                     currentView ===
@@ -563,15 +644,19 @@ export default function App() {
                   />
                   Leave Operations
                 </button>
+
               </>
             )}
 
-            {/* =================================
+            {/* =================================================
                 FACULTY MENU
-            ================================= */}
+            ================================================= */}
 
             {session.role === 'faculty' && (
               <>
+
+                {/* Manual Roll Call */}
+
                 <button
                   className={
                     currentView ===
@@ -588,6 +673,29 @@ export default function App() {
                   <UserCheck size={18} />
                   Roll Call
                 </button>
+
+                {/* =================================================
+                    NEW: FACE ATTENDANCE
+                ================================================= */}
+
+                <button
+                  className={
+                    currentView ===
+                    'faculty-face-attendance'
+                      ? 'active'
+                      : ''
+                  }
+                  onClick={() =>
+                    setCurrentView(
+                      'faculty-face-attendance'
+                    )
+                  }
+                >
+                  <ScanFace size={18} />
+                  Face Attendance
+                </button>
+
+                {/* Faculty Leaves */}
 
                 <button
                   className={
@@ -606,6 +714,8 @@ export default function App() {
                   Leaves ({pendingLeavesCount})
                 </button>
 
+                {/* Publish Notes */}
+
                 <button
                   className={
                     currentView ===
@@ -622,15 +732,17 @@ export default function App() {
                   <BookOpen size={18} />
                   Publish Notes
                 </button>
+
               </>
             )}
 
-            {/* =================================
+            {/* =================================================
                 ADMIN MENU
-            ================================= */}
+            ================================================= */}
 
             {session.role === 'admin' && (
               <>
+
                 {/* Onboard Student */}
 
                 <button
@@ -650,7 +762,7 @@ export default function App() {
                   Onboard Student
                 </button>
 
-                {/* NEW: Add Faculty */}
+                {/* Add Faculty */}
 
                 <button
                   className={
@@ -687,14 +799,15 @@ export default function App() {
                   <Settings size={18} />
                   Section Allocation
                 </button>
+
               </>
             )}
 
           </div>
 
-          {/* =================================
+          {/* =================================================
               BOTTOM MENU
-          ================================= */}
+          ================================================= */}
 
           <div
             style={{
@@ -730,17 +843,19 @@ export default function App() {
           </div>
 
         </nav>
+
       </aside>
 
-      {/* =====================================
+      {/* =====================================================
           MAIN CONTENT
-      ====================================== */}
+      ====================================================== */}
 
       <main className="erp-main">
 
         <header className="erp-header">
 
           <div>
+
             <h1>
               Welcome, {session.name}
             </h1>
@@ -750,6 +865,7 @@ export default function App() {
                 session.role.toUpperCase()
               }
             </div>
+
           </div>
 
           <NotificationDrawer
@@ -763,32 +879,29 @@ export default function App() {
 
         </header>
 
-        {/* =================================
+        {/* =================================================
             LOADING
-        ================================= */}
+        ================================================= */}
 
         {isDataLoading ? (
 
           <div className="loading-container">
+
             <Loader2
               className="animate-spin"
               size={32}
               color="#8b5cf6"
             />
+
           </div>
 
         ) : (
 
           <div className="view-content-wrapper">
 
-            {/* =================================
+            {/* =================================================
                 ADMIN PANEL
-
-                This receives:
-                admin-addStudent
-                admin-addFaculty
-                admin-assignFaculty
-            ================================= */}
+            ================================================= */}
 
             <AdminPanel
               dbData={dbData}
@@ -799,9 +912,17 @@ export default function App() {
               }
             />
 
-            {/* =================================
+            {/* =================================================
                 FACULTY PANEL
-            ================================= */}
+
+                Important:
+                FacultyPanel must handle:
+
+                faculty-mark
+                faculty-face-attendance
+                faculty-leaves
+                faculty-notes
+            ================================================= */}
 
             <FacultyPanel
               dbData={dbData}
@@ -812,9 +933,9 @@ export default function App() {
               }
             />
 
-            {/* =================================
+            {/* =================================================
                 STUDENT PANEL
-            ================================= */}
+            ================================================= */}
 
             <StudentPanel
               dbData={dbData}
@@ -823,9 +944,9 @@ export default function App() {
               fetchERPData={fetchERPData}
             />
 
-            {/* =================================
+            {/* =================================================
                 PROFILE
-            ================================= */}
+            ================================================= */}
 
             {currentView === 'profile' && (
 
@@ -839,6 +960,8 @@ export default function App() {
                   alignItems: 'start'
                 }}
               >
+
+                {/* Profile Information */}
 
                 <div
                   className="panel"
@@ -855,7 +978,8 @@ export default function App() {
                       borderRadius: '50%',
                       background:
                         '#f3e8ff',
-                      color: '#7c3aed',
+                      color:
+                        '#7c3aed',
                       display: 'flex',
                       alignItems:
                         'center',
@@ -880,7 +1004,21 @@ export default function App() {
                     @{session.username}
                   </p>
 
+                  <div
+                    className="user-profile-badge"
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '8px'
+                    }}
+                  >
+                    ROLE: {
+                      session.role.toUpperCase()
+                    }
+                  </div>
+
                 </div>
+
+                {/* Password Update */}
 
                 <div
                   className="panel"
@@ -905,32 +1043,56 @@ export default function App() {
                     }}
                   >
 
+                    {/* Current Password */}
+
                     <div className="form-group">
 
                       <label>
                         Current Password
                       </label>
 
-                      <input
-                        type={
-                          showProfileCurrentPass
-                            ? 'text'
-                            : 'password'
-                        }
-                        required
-                        value={
-                          profilePassword.current
-                        }
-                        onChange={e =>
-                          setProfilePassword({
-                            ...profilePassword,
-                            current:
-                              e.target.value
-                          })
-                        }
-                      />
+                      <div className="password-toggle-wrapper">
+
+                        <input
+                          type={
+                            showProfileCurrentPass
+                              ? 'text'
+                              : 'password'
+                          }
+                          required
+                          value={
+                            profilePassword.current
+                          }
+                          onChange={e =>
+                            setProfilePassword({
+                              ...profilePassword,
+                              current:
+                                e.target.value
+                            })
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          className="password-visibility-btn"
+                          onClick={() =>
+                            setShowProfileCurrentPass(
+                              !showProfileCurrentPass
+                            )
+                          }
+                        >
+                          {showProfileCurrentPass ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+
+                      </div>
 
                     </div>
+
+                    {/* New Password */}
 
                     <div className="form-group">
 
@@ -938,26 +1100,48 @@ export default function App() {
                         New Password
                       </label>
 
-                      <input
-                        type={
-                          showProfileNewPass
-                            ? 'text'
-                            : 'password'
-                        }
-                        required
-                        value={
-                          profilePassword.new
-                        }
-                        onChange={e =>
-                          setProfilePassword({
-                            ...profilePassword,
-                            new:
-                              e.target.value
-                          })
-                        }
-                      />
+                      <div className="password-toggle-wrapper">
+
+                        <input
+                          type={
+                            showProfileNewPass
+                              ? 'text'
+                              : 'password'
+                          }
+                          required
+                          value={
+                            profilePassword.new
+                          }
+                          onChange={e =>
+                            setProfilePassword({
+                              ...profilePassword,
+                              new:
+                                e.target.value
+                            })
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          className="password-visibility-btn"
+                          onClick={() =>
+                            setShowProfileNewPass(
+                              !showProfileNewPass
+                            )
+                          }
+                        >
+                          {showProfileNewPass ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+
+                      </div>
 
                     </div>
+
+                    {/* Confirm Password */}
 
                     <div className="form-group">
 
@@ -965,24 +1149,44 @@ export default function App() {
                         Confirm Password
                       </label>
 
-                      <input
-                        type={
-                          showProfileConfirmPass
-                            ? 'text'
-                            : 'password'
-                        }
-                        required
-                        value={
-                          profilePassword.confirm
-                        }
-                        onChange={e =>
-                          setProfilePassword({
-                            ...profilePassword,
-                            confirm:
-                              e.target.value
-                          })
-                        }
-                      />
+                      <div className="password-toggle-wrapper">
+
+                        <input
+                          type={
+                            showProfileConfirmPass
+                              ? 'text'
+                              : 'password'
+                          }
+                          required
+                          value={
+                            profilePassword.confirm
+                          }
+                          onChange={e =>
+                            setProfilePassword({
+                              ...profilePassword,
+                              confirm:
+                                e.target.value
+                            })
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          className="password-visibility-btn"
+                          onClick={() =>
+                            setShowProfileConfirmPass(
+                              !showProfileConfirmPass
+                            )
+                          }
+                        >
+                          {showProfileConfirmPass ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+
+                      </div>
 
                     </div>
 
@@ -993,7 +1197,9 @@ export default function App() {
                       }
                       className="submit-btn"
                     >
-                      Update Security State
+                      {isUpdatingPassword
+                        ? 'Updating...'
+                        : 'Update Security State'}
                     </button>
 
                   </form>
@@ -1005,9 +1211,11 @@ export default function App() {
             )}
 
           </div>
+
         )}
 
       </main>
+
     </div>
   );
 }
