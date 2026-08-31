@@ -3,10 +3,12 @@ import numpy as np
 import os
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from insightface.app import FaceAnalysis
 
 
 app = Flask(__name__)
+CORS(app)
 
 
 # -----------------------------------

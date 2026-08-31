@@ -281,13 +281,16 @@ router.post(
       // Convert recognized IDs to strings
       // -------------------------------------------------
 
-      const recognizedSet =
-        new Set(
-          recognizedStudents.map(
-            id => String(id)
-          )
-        );
+          const recognizedSet = new Set(
+            recognizedStudents.map(id => {
+            const value = String(id).trim();
 
+            // AI returns 101, database uses S101
+             return value.startsWith('S')
+               ? value
+                : `S${value}`;
+             })
+          );
 
       const attendanceResults = [];
 
@@ -298,13 +301,11 @@ router.post(
 
       for (const student of studentRows) {
 
-        const studentId =
-          String(student.student_id);
+        const studentId = String(student.student_id).trim();
 
-        const status =
-          recognizedSet.has(studentId)
-            ? 'Present'
-            : 'Absent';
+        const status = recognizedSet.has(studentId)
+          ? 'Present'
+          : 'Absent';
 
 
         // Save attendance

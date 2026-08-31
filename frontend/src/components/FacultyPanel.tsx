@@ -278,8 +278,12 @@ export default function FacultyPanel({
           const isRecognized =
             recognizedStudents.some(
               (recognizedId) =>
-                recognizedId.toUpperCase() ===
-                normalizedStudentId
+                String(recognizedId)
+                  .replace(/^S/i, '')
+                  .toUpperCase() ===
+                String(normalizedStudentId)
+                  .replace(/^S/i, '')
+                  .toUpperCase()
             );
 
           automaticAttendance[
