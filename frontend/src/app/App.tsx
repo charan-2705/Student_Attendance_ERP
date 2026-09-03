@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback
-} from 'react';
-
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Layers,
   Settings,
@@ -16,10 +11,8 @@ import {
   ClipboardList,
   ShieldAlert,
   Eye,
-  EyeOff,
-  ScanFace
+  EyeOff
 } from 'lucide-react';
-
 import { io } from 'socket.io-client';
 
 import '../styles/App.css';
@@ -29,16 +22,40 @@ import AdminPanel from '../components/admin/AdminPanel';
 import FacultyPanel from '../components/faculty/FacultyPanel';
 import StudentPanel from '../components/student/StudentPanel';
 
+import {
+  ERPDashboardData,
+  UserSession,
+  StudentMetadata
+} from '../types';
+
+interface LoginResponse {
+  success: boolean;
+  token?: string;
+  message?: string;
+  user?: UserSession;
+}
+
+interface NotificationPayload {
+  title: string;
+  message: string;
+}
+
+interface ProfilePassword {
+  current: string;
+  new: string;
+  confirm: string;
+}
+
 const socket = io('http://localhost:5000', {
   autoConnect: false
 });
 
 export default function App() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] =
+    useState<UserSession | null>(null);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
   const [loginError, setLoginError] = useState('');
 
   const [isDataLoading, setIsDataLoading] =
@@ -50,17 +67,8 @@ export default function App() {
   const [showLoginPass, setShowLoginPass] =
     useState(false);
 
-  const [showProfileCurrentPass, setShowProfileCurrentPass] =
-    useState(false);
-
-  const [showProfileNewPass, setShowProfileNewPass] =
-    useState(false);
-
-  const [showProfileConfirmPass, setShowProfileConfirmPass] =
-    useState(false);
-
   const [profilePassword, setProfilePassword] =
-    useState({
+    useState<ProfilePassword>({
       current: '',
       new: '',
       confirm: ''
@@ -69,24 +77,20 @@ export default function App() {
   const [isUpdatingPassword, setIsUpdatingPassword] =
     useState(false);
 
-  const [dbData, setDbData] = useState<any>({
-    subjects: [],
-    studentRecords: [],
-    sharedNotes: [],
-    leaveRequests: [],
-    facultyList: [],
-    assignments: [],
-    attendanceLogs: []
-  });
+  const [dbData, setDbData] =
+    useState<ERPDashboardData>({
+      subjects: [],
+      studentRecords: [],
+      sharedNotes: [],
+      leaveRequests: [],
+      facultyList: [],
+      assignments: [],
+      attendanceLogs: []
+    });
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem(
-      'erp_session_token'
-    );
-
-    localStorage.removeItem(
-      'erp_user_profile'
-    );
+    localStorage.removeItem('erp_session_token');
+    localStorage.removeItem('erp_user_profile');
 
     setSession(null);
     setCurrentView('');
@@ -96,61 +100,51 @@ export default function App() {
 
   useEffect(() => {
     const savedToken =
-      localStorage.getItem(
+      localStorage.getItem('erp_session_token');
+
+    const savedUser =
+      localStorage.getItem('erp_user_profile');
+
+    if (!savedToken || !savedUser) {
+      return;
+    }
+
+    try {
+      const parsedUser =
+        JSON.parse(savedUser) as UserSession;
+
+      setSession(parsedUser);
+
+      if (parsedUser.role === 'admin') {
+        setCurrentView('admin-addStudent');
+      } else if (parsedUser.role === 'faculty') {
+        setCurrentView('faculty-mark');
+      } else {
+        setCurrentView('student-ai-insights');
+      }
+    } catch (error) {
+      console.error(
+        'Failed to restore session:',
+        error
+      );
+
+      localStorage.removeItem(
         'erp_session_token'
       );
 
-    const savedUser =
-      localStorage.getItem(
+      localStorage.removeItem(
         'erp_user_profile'
       );
-
-    if (savedToken && savedUser) {
-      try {
-        const parsedUser =
-          JSON.parse(savedUser);
-
-        setSession(parsedUser);
-
-        if (parsedUser.role === 'admin') {
-          setCurrentView(
-            'admin-addStudent'
-          );
-        } else if (
-          parsedUser.role === 'faculty'
-        ) {
-          setCurrentView(
-            'faculty-mark'
-          );
-        } else {
-          setCurrentView(
-            'student-ai-insights'
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Failed to restore session:',
-          error
-        );
-
-        localStorage.removeItem(
-          'erp_session_token'
-        );
-
-        localStorage.removeItem(
-          'erp_user_profile'
-        );
-      }
     }
   }, []);
 
   const fetchERPData = useCallback(() => {
     const currentToken =
-      localStorage.getItem(
-        'erp_session_token'
-      );
+      localStorage.getItem('erp_session_token');
 
-    if (!currentToken) return;
+    if (!currentToken) {
+      return;
+    }
 
     setIsDataLoading(true);
 
@@ -163,13 +157,12 @@ export default function App() {
         }
       }
     )
-      .then((res) => {
+      .then(res => {
         if (
           res.status === 401 ||
           res.status === 403
         ) {
           handleLogout();
-
           throw new Error(
             'Expired session.'
           );
@@ -177,11 +170,16 @@ export default function App() {
 
         return res.json();
       })
-      .then((data) => {
-        setDbData(data);
+      .then(data => {
+        setDbData(
+          data as ERPDashboardData
+        );
       })
-      .catch((err) => {
-        console.error(err);
+      .catch(error => {
+        console.error(
+          'Dashboard data error:',
+          error
+        );
       })
       .finally(() => {
         setIsDataLoading(false);
@@ -189,7 +187,9 @@ export default function App() {
   }, [handleLogout]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     fetchERPData();
 
@@ -201,7 +201,7 @@ export default function App() {
     );
 
     const handleNewNotification = (
-      notification: any
+      notification: NotificationPayload
     ) => {
       alert(
         `🔔 [${notification.title}]: ${notification.message}`
@@ -211,7 +211,7 @@ export default function App() {
     };
 
     const handleDashboardMutation = (
-      updatedMetrics: any
+      updatedMetrics: ERPDashboardData
     ) => {
       setDbData(updatedMetrics);
     };
@@ -239,10 +239,7 @@ export default function App() {
 
       socket.disconnect();
     };
-  }, [
-    session,
-    fetchERPData
-  ]);
+  }, [session, fetchERPData]);
 
   const handleLogin = (
     e: React.FormEvent
@@ -265,19 +262,20 @@ export default function App() {
         })
       }
     )
-      .then((res) => {
+      .then(res => {
         if (!res.ok) {
           throw new Error(
             'Invalid access parameters.'
           );
         }
 
-        return res.json();
+        return res.json() as Promise<LoginResponse>;
       })
-      .then((data) => {
+      .then(data => {
         if (
           data.success &&
-          data.token
+          data.token &&
+          data.user
         ) {
           localStorage.setItem(
             'erp_session_token',
@@ -291,16 +289,12 @@ export default function App() {
 
           setSession(data.user);
 
-          if (
-            data.user.role ===
-            'admin'
-          ) {
+          if (data.user.role === 'admin') {
             setCurrentView(
               'admin-addStudent'
             );
           } else if (
-            data.user.role ===
-            'faculty'
+            data.user.role === 'faculty'
           ) {
             setCurrentView(
               'faculty-mark'
@@ -317,9 +311,9 @@ export default function App() {
           );
         }
       })
-      .catch((err) => {
+      .catch(error => {
         setLoginError(
-          err.message
+          error.message
         );
       });
   };
@@ -336,7 +330,6 @@ export default function App() {
       alert(
         '❌ Passwords do not match.'
       );
-
       return;
     }
 
@@ -349,7 +342,6 @@ export default function App() {
         headers: {
           'Content-Type':
             'application/json',
-
           Authorization:
             `Bearer ${localStorage.getItem(
               'erp_session_token'
@@ -358,19 +350,15 @@ export default function App() {
         body: JSON.stringify({
           username:
             session?.username,
-
           currentPassword:
             profilePassword.current,
-
           newPassword:
             profilePassword.new
         })
       }
     )
-      .then((res) =>
-        res.json()
-      )
-      .then((data) => {
+      .then(res => res.json())
+      .then(data => {
         if (data.success) {
           alert(
             '🔒 Password updated.'
@@ -387,17 +375,18 @@ export default function App() {
           );
         }
       })
-      .catch((err) => {
-        console.error(err);
+      .catch(error => {
+        console.error(
+          'Password update error:',
+          error
+        );
 
         alert(
           '❌ Failed to update password.'
         );
       })
       .finally(() => {
-        setIsUpdatingPassword(
-          false
-        );
+        setIsUpdatingPassword(false);
       });
   };
 
@@ -408,68 +397,47 @@ export default function App() {
       | 'leaves'
   ) => {
     let csvContent = '';
-
     const fileName =
       `${datasetType}_report.csv`;
 
-    if (
-      datasetType ===
-      'students'
-    ) {
+    if (datasetType === 'students') {
       csvContent +=
         'Student ID,Full Name,Section\n';
 
       dbData.studentRecords.forEach(
-        (s: any) => {
+        (student: StudentMetadata) => {
           csvContent +=
-            `"${s.id}","${s.name}","${s.section}"\n`;
+            `"${student.id}","${student.name}","${student.section}"\n`;
         }
       );
     }
 
     if (
-      datasetType ===
-      'attendance'
+      datasetType === 'attendance'
     ) {
       csvContent +=
         'Student ID,Subject,Date,Status\n';
 
-      if (
-        dbData.attendanceLogs
-      ) {
+      if (dbData.attendanceLogs) {
         dbData.attendanceLogs.forEach(
-          (a: any) => {
+          attendance => {
             csvContent +=
-              `"${a.student_id || a.studentId || ''}",` +
-              `"${a.subject_name || a.subject || ''}",` +
-              `"${a.date || ''}",` +
-              `"${a.status || ''}"\n`;
+              `"${attendance.studentId}","${attendance.subject}","${attendance.date}","${attendance.status}"\n`;
           }
         );
       }
     }
 
-    if (
-      datasetType ===
-      'leaves'
-    ) {
+    if (datasetType === 'leaves') {
       csvContent +=
         'Student ID,Reason,Start Date,End Date,Status\n';
 
-      if (
-        dbData.leaveRequests
-      ) {
-        dbData.leaveRequests.forEach(
-          (leave: any) => {
-            csvContent +=
-              `"${leave.studentId || ''}",` +
-              `"${leave.reason || ''}",` +
-              `"${leave.startDate || ''}",` +
-              `"${leave.endDate || ''}",` +
-              `"${leave.status || ''}"\n`;
-          }
-        );
-      }
+      dbData.leaveRequests.forEach(
+        leave => {
+          csvContent +=
+            `"${leave.studentId}","${leave.reason}","${leave.startDate}","${leave.endDate}","${leave.status}"\n`;
+        }
+      );
     }
 
     const blob = new Blob(
@@ -481,14 +449,10 @@ export default function App() {
     );
 
     const url =
-      URL.createObjectURL(
-        blob
-      );
+      URL.createObjectURL(blob);
 
     const link =
-      document.createElement(
-        'a'
-      );
+      document.createElement('a');
 
     link.setAttribute(
       'href',
@@ -500,27 +464,23 @@ export default function App() {
       fileName
     );
 
-    document.body.appendChild(
-      link
-    );
+    document.body.appendChild(link);
 
     link.click();
 
-    document.body.removeChild(
-      link
-    );
+    document.body.removeChild(link);
 
-    URL.revokeObjectURL(
-      url
-    );
+    URL.revokeObjectURL(url);
   };
 
   if (!session) {
     return (
       <div className="login-page-container">
         <div className="login-card-split">
+
           <div className="login-form-side">
             <div className="login-form-content">
+
               <h2>Login</h2>
 
               {loginError && (
@@ -530,22 +490,15 @@ export default function App() {
               )}
 
               <form
-                onSubmit={
-                  handleLogin
-                }
+                onSubmit={handleLogin}
               >
                 <div className="input-field-group">
                   <input
                     type="text"
-                    value={
-                      username
-                    }
-                    onChange={(
-                      e
-                    ) =>
+                    value={username}
+                    onChange={e =>
                       setUsername(
-                        e.target
-                          .value
+                        e.target.value
                       )
                     }
                     required
@@ -560,15 +513,10 @@ export default function App() {
                         ? 'text'
                         : 'password'
                     }
-                    value={
-                      password
-                    }
-                    onChange={(
-                      e
-                    ) =>
+                    value={password}
+                    onChange={e =>
                       setPassword(
-                        e.target
-                          .value
+                        e.target.value
                       )
                     }
                     required
@@ -585,13 +533,9 @@ export default function App() {
                     }
                   >
                     {showLoginPass ? (
-                      <EyeOff
-                        size={18}
-                      />
+                      <EyeOff size={18} />
                     ) : (
-                      <Eye
-                        size={18}
-                      />
+                      <Eye size={18} />
                     )}
                   </button>
                 </div>
@@ -603,17 +547,18 @@ export default function App() {
                   Login
                 </button>
               </form>
+
             </div>
           </div>
 
           <div className="login-banner-side">
             <div className="banner-text-content">
               <h1>
-                Welcome to
-                student portal
+                Welcome to student portal
               </h1>
             </div>
           </div>
+
         </div>
       </div>
     );
@@ -621,37 +566,36 @@ export default function App() {
 
   const pendingLeavesCount =
     dbData.leaveRequests.filter(
-      (r: any) =>
-        r.status ===
-        'Pending'
+      request =>
+        request.status === 'Pending'
     ).length;
 
   return (
     <div className="erp-container">
+
       <aside className="erp-sidebar">
+
         <div className="erp-logo">
           <Layers
             size={28}
             color="#a78bfa"
           />
-
           <h2>
             STUDENT PORTAL
           </h2>
         </div>
 
         <nav className="erp-nav">
+
           <div
             style={{
-              display:
-                'flex',
-              flexDirection:
-                'column',
+              display: 'flex',
+              flexDirection: 'column',
               gap: '6px'
             }}
           >
-            {session.role ===
-              'student' && (
+
+            {session.role === 'student' && (
               <>
                 <button
                   className={
@@ -666,10 +610,7 @@ export default function App() {
                     )
                   }
                 >
-                  <Calendar
-                    size={18}
-                  />
-
+                  <Calendar size={18} />
                   AI Insights
                 </button>
 
@@ -686,10 +627,7 @@ export default function App() {
                     )
                   }
                 >
-                  <ClipboardList
-                    size={18}
-                  />
-
+                  <ClipboardList size={18} />
                   Attendance Logs
                 </button>
 
@@ -706,10 +644,7 @@ export default function App() {
                     )
                   }
                 >
-                  <BookOpen
-                    size={18}
-                  />
-
+                  <BookOpen size={18} />
                   Lecture Notes
                 </button>
 
@@ -726,17 +661,13 @@ export default function App() {
                     )
                   }
                 >
-                  <ShieldAlert
-                    size={18}
-                  />
-
+                  <ShieldAlert size={18} />
                   Leave Operations
                 </button>
               </>
             )}
 
-            {session.role ===
-              'faculty' && (
+            {session.role === 'faculty' && (
               <>
                 <button
                   className={
@@ -751,31 +682,8 @@ export default function App() {
                     )
                   }
                 >
-                  <UserCheck
-                    size={18}
-                  />
-
+                  <UserCheck size={18} />
                   Roll Call
-                </button>
-
-                <button
-                  className={
-                    currentView ===
-                    'faculty-face-attendance'
-                      ? 'active'
-                      : ''
-                  }
-                  onClick={() =>
-                    setCurrentView(
-                      'faculty-face-attendance'
-                    )
-                  }
-                >
-                  <ScanFace
-                    size={18}
-                  />
-
-                  Face Attendance
                 </button>
 
                 <button
@@ -791,15 +699,8 @@ export default function App() {
                     )
                   }
                 >
-                  <FileClock
-                    size={18}
-                  />
-
-                  Leaves (
-                  {
-                    pendingLeavesCount
-                  }
-                  )
+                  <FileClock size={18} />
+                  Leaves ({pendingLeavesCount})
                 </button>
 
                 <button
@@ -815,17 +716,13 @@ export default function App() {
                     )
                   }
                 >
-                  <BookOpen
-                    size={18}
-                  />
-
+                  <BookOpen size={18} />
                   Publish Notes
                 </button>
               </>
             )}
 
-            {session.role ===
-              'admin' && (
+            {session.role === 'admin' && (
               <>
                 <button
                   className={
@@ -840,31 +737,8 @@ export default function App() {
                     )
                   }
                 >
-                  <Users
-                    size={18}
-                  />
-
+                  <Users size={18} />
                   Onboard Student
-                </button>
-
-                <button
-                  className={
-                    currentView ===
-                    'admin-addFaculty'
-                      ? 'active'
-                      : ''
-                  }
-                  onClick={() =>
-                    setCurrentView(
-                      'admin-addFaculty'
-                    )
-                  }
-                >
-                  <UserCheck
-                    size={18}
-                  />
-
-                  Add Faculty
                 </button>
 
                 <button
@@ -880,72 +754,60 @@ export default function App() {
                     )
                   }
                 >
-                  <Settings
-                    size={18}
-                  />
-
+                  <Settings size={18} />
                   Section Allocation
                 </button>
               </>
             )}
+
           </div>
 
           <div
             style={{
-              display:
-                'flex',
-              flexDirection:
-                'column',
+              display: 'flex',
+              flexDirection: 'column',
               gap: '8px',
-              marginTop:
-                'auto',
-              paddingBottom:
-                '20px'
+              marginTop: 'auto',
+              paddingBottom: '20px'
             }}
           >
             <button
               className={`profile-settings-nav-btn ${
-                currentView ===
-                'profile'
+                currentView === 'profile'
                   ? 'active'
                   : ''
               }`}
               onClick={() =>
-                setCurrentView(
-                  'profile'
-                )
+                setCurrentView('profile')
               }
             >
-              <Settings
-                size={18}
-              />
-
+              <Settings size={18} />
               Account Settings
             </button>
 
             <button
               className="logout-btn"
-              onClick={
-                handleLogout
-              }
+              onClick={handleLogout}
             >
               Log Out
             </button>
           </div>
+
         </nav>
+
       </aside>
 
       <main className="erp-main">
+
         <header className="erp-header">
+
           <div>
             <h1>
-              Welcome,{' '}
-              {session.name}
+              Welcome, {session.name}
             </h1>
 
             <div className="user-profile-badge">
-              ROLE:{' '}
-              {session.role.toUpperCase()}
+              ROLE: {session.role.toUpperCase()}
             </div>
           </div>
 
@@ -957,6 +819,7 @@ export default function App() {
                 session.role
             }}
           />
+
         </header>
 
         {isDataLoading ? (
@@ -969,14 +832,11 @@ export default function App() {
           </div>
         ) : (
           <div className="view-content-wrapper">
+
             <AdminPanel
               dbData={dbData}
-              currentView={
-                currentView
-              }
-              fetchERPData={
-                fetchERPData
-              }
+              currentView={currentView}
+              fetchERPData={fetchERPData}
               exportTableToCSV={
                 exportTableToCSV
               }
@@ -984,12 +844,8 @@ export default function App() {
 
             <FacultyPanel
               dbData={dbData}
-              currentView={
-                currentView
-              }
-              fetchERPData={
-                fetchERPData
-              }
+              currentView={currentView}
+              fetchERPData={fetchERPData}
               exportTableToCSV={
                 exportTableToCSV
               }
@@ -997,70 +853,49 @@ export default function App() {
 
             <StudentPanel
               dbData={dbData}
-              currentView={
-                currentView
-              }
-              session={
-                session
-              }
-              fetchERPData={
-                fetchERPData
-              }
+              currentView={currentView}
+              session={session}
+              fetchERPData={fetchERPData}
             />
 
-            {currentView ===
-              'profile' && (
+            {currentView === 'profile' && (
               <div
                 className="animate-fade"
                 style={{
-                  display:
-                    'grid',
+                  display: 'grid',
                   gridTemplateColumns:
                     '1fr 2fr',
                   gap: '24px',
-                  alignItems:
-                    'start'
+                  alignItems: 'start'
                 }}
               >
+
                 <div
                   className="panel"
                   style={{
-                    textAlign:
-                      'center',
-                    padding:
-                      '24px'
+                    textAlign: 'center',
+                    padding: '24px'
                   }}
                 >
                   <div
                     style={{
-                      width:
-                        '80px',
-                      height:
-                        '80px',
-                      borderRadius:
-                        '50%',
-                      background:
-                        '#f3e8ff',
-                      color:
-                        '#7c3aed',
-                      display:
-                        'flex',
-                      alignItems:
-                        'center',
+                      width: '80px',
+                      height: '80px',
+                      borderRadius: '50%',
+                      background: '#f3e8ff',
+                      color: '#7c3aed',
+                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent:
                         'center',
                       margin:
                         '0 auto 16px auto',
-                      fontSize:
-                        '28px',
-                      fontWeight:
-                        'bold'
+                      fontSize: '28px',
+                      fontWeight: 'bold'
                     }}
                   >
                     {session.name
-                      .charAt(
-                        0
-                      )
+                      .charAt(0)
                       .toUpperCase()}
                   </div>
 
@@ -1069,36 +904,18 @@ export default function App() {
                   </h3>
 
                   <p>
-                    @
-                    {
-                      session.username
-                    }
+                    @{session.username}
                   </p>
-
-                  <div
-                    className="user-profile-badge"
-                    style={{
-                      display:
-                        'inline-block',
-                      marginTop:
-                        '8px'
-                    }}
-                  >
-                    ROLE:{' '}
-                    {session.role.toUpperCase()}
-                  </div>
                 </div>
 
                 <div
                   className="panel"
                   style={{
-                    padding:
-                      '24px'
+                    padding: '24px'
                   }}
                 >
                   <h3>
-                    Re-Encrypt
-                    Security Keys
+                    Re-Encrypt Security Keys
                   </h3>
 
                   <form
@@ -1106,67 +923,32 @@ export default function App() {
                       handleUpdatePassword
                     }
                     style={{
-                      display:
-                        'flex',
+                      display: 'flex',
                       flexDirection:
                         'column',
                       gap: '16px'
                     }}
                   >
+
                     <div className="form-group">
                       <label>
                         Current Password
                       </label>
 
-                      <div className="password-toggle-wrapper">
-                        <input
-                          type={
-                            showProfileCurrentPass
-                              ? 'text'
-                              : 'password'
-                          }
-                          required
-                          value={
-                            profilePassword.current
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            setProfilePassword(
-                              {
-                                ...profilePassword,
-                                current:
-                                  e.target
-                                    .value
-                              }
-                            )
-                          }
-                        />
-
-                        <button
-                          type="button"
-                          className="password-visibility-btn"
-                          onClick={() =>
-                            setShowProfileCurrentPass(
-                              !showProfileCurrentPass
-                            )
-                          }
-                        >
-                          {showProfileCurrentPass ? (
-                            <EyeOff
-                              size={
-                                16
-                              }
-                            />
-                          ) : (
-                            <Eye
-                              size={
-                                16
-                              }
-                            />
-                          )}
-                        </button>
-                      </div>
+                      <input
+                        type="password"
+                        required
+                        value={
+                          profilePassword.current
+                        }
+                        onChange={e =>
+                          setProfilePassword({
+                            ...profilePassword,
+                            current:
+                              e.target.value
+                          })
+                        }
+                      />
                     </div>
 
                     <div className="form-group">
@@ -1174,55 +956,20 @@ export default function App() {
                         New Password
                       </label>
 
-                      <div className="password-toggle-wrapper">
-                        <input
-                          type={
-                            showProfileNewPass
-                              ? 'text'
-                              : 'password'
-                          }
-                          required
-                          value={
-                            profilePassword.new
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            setProfilePassword(
-                              {
-                                ...profilePassword,
-                                new:
-                                  e.target
-                                    .value
-                              }
-                            )
-                          }
-                        />
-
-                        <button
-                          type="button"
-                          className="password-visibility-btn"
-                          onClick={() =>
-                            setShowProfileNewPass(
-                              !showProfileNewPass
-                            )
-                          }
-                        >
-                          {showProfileNewPass ? (
-                            <EyeOff
-                              size={
-                                16
-                              }
-                            />
-                          ) : (
-                            <Eye
-                              size={
-                                16
-                              }
-                            />
-                          )}
-                        </button>
-                      </div>
+                      <input
+                        type="password"
+                        required
+                        value={
+                          profilePassword.new
+                        }
+                        onChange={e =>
+                          setProfilePassword({
+                            ...profilePassword,
+                            new:
+                              e.target.value
+                          })
+                        }
+                      />
                     </div>
 
                     <div className="form-group">
@@ -1230,55 +977,20 @@ export default function App() {
                         Confirm Password
                       </label>
 
-                      <div className="password-toggle-wrapper">
-                        <input
-                          type={
-                            showProfileConfirmPass
-                              ? 'text'
-                              : 'password'
-                          }
-                          required
-                          value={
-                            profilePassword.confirm
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            setProfilePassword(
-                              {
-                                ...profilePassword,
-                                confirm:
-                                  e.target
-                                    .value
-                              }
-                            )
-                          }
-                        />
-
-                        <button
-                          type="button"
-                          className="password-visibility-btn"
-                          onClick={() =>
-                            setShowProfileConfirmPass(
-                              !showProfileConfirmPass
-                            )
-                          }
-                        >
-                          {showProfileConfirmPass ? (
-                            <EyeOff
-                              size={
-                                16
-                              }
-                            />
-                          ) : (
-                            <Eye
-                              size={
-                                16
-                              }
-                            />
-                          )}
-                        </button>
-                      </div>
+                      <input
+                        type="password"
+                        required
+                        value={
+                          profilePassword.confirm
+                        }
+                        onChange={e =>
+                          setProfilePassword({
+                            ...profilePassword,
+                            confirm:
+                              e.target.value
+                          })
+                        }
+                      />
                     </div>
 
                     <button
@@ -1292,13 +1004,18 @@ export default function App() {
                         ? 'Updating...'
                         : 'Update Security State'}
                     </button>
+
                   </form>
                 </div>
+
               </div>
             )}
+
           </div>
         )}
+
       </main>
+
     </div>
   );
 }
