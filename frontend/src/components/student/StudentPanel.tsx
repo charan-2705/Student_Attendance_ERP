@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback
+} from 'react';
 import { Download } from 'lucide-react';
 
 import {
@@ -89,8 +94,7 @@ export default function StudentPanel({
   // AI ATTENDANCE FORECAST
   // =========================================================
 
-  const runAIEngineForecast = () => {
-
+  const runAIEngineForecast = useCallback(() => {
     const token =
       localStorage.getItem('erp_session_token');
 
@@ -119,18 +123,22 @@ export default function StudentPanel({
           err
         );
       });
-  };
+  }, [
+    session?.studentId,
+    simulatedAbsences
+  ]);
 
   useEffect(() => {
-
     if (
       currentView ===
       'student-ai-insights'
     ) {
       runAIEngineForecast();
     }
-
-  }, [currentView]);
+  }, [
+    currentView,
+    runAIEngineForecast
+  ]);
 
   // =========================================================
   // LEAVE SUBMISSION
@@ -490,10 +498,6 @@ export default function StudentPanel({
     return (
       <div className="panel animate-fade">
 
-        {/* =====================================================
-            PAGE HEADER
-        ====================================================== */}
-
         <div
           style={{
             marginBottom: '24px'
@@ -521,10 +525,6 @@ export default function StudentPanel({
           </p>
 
         </div>
-
-        {/* =====================================================
-            SUMMARY CARDS
-        ====================================================== */}
 
         <div
           style={{
@@ -664,10 +664,6 @@ export default function StudentPanel({
 
         </div>
 
-        {/* =====================================================
-            MAIN ATTENDANCE SECTION
-        ====================================================== */}
-
         <div
           style={{
             display: 'grid',
@@ -677,10 +673,6 @@ export default function StudentPanel({
             alignItems: 'start'
           }}
         >
-
-          {/* ===================================================
-              OVERALL ATTENDANCE
-          ==================================================== */}
 
           <div
             style={{
@@ -790,8 +782,6 @@ export default function StudentPanel({
 
             </div>
 
-            {/* 75% STATUS */}
-
             <div
               style={{
                 marginTop: '8px',
@@ -820,10 +810,6 @@ export default function StudentPanel({
             </div>
 
           </div>
-
-          {/* ===================================================
-              SUBJECT-WISE GRAPH
-          ==================================================== */}
 
           <div
             style={{
@@ -986,8 +972,6 @@ export default function StudentPanel({
 
             )}
 
-            {/* SUBJECT DETAIL TABLE */}
-
             {subjectAttendanceData.length >
               0 && (
 
@@ -1096,10 +1080,6 @@ export default function StudentPanel({
           </div>
 
         </div>
-
-        {/* =====================================================
-            AI PREDICTION SECTION
-        ====================================================== */}
 
         <div
           style={{
@@ -1359,8 +1339,6 @@ export default function StudentPanel({
                   }}
                 >
 
-                  {/* DATE HEADER */}
-
                   <div
                     style={{
                       padding:
@@ -1429,8 +1407,6 @@ export default function StudentPanel({
                     </span>
 
                   </div>
-
-                  {/* DAY RECORDS */}
 
                   <table
                     className="erp-table"

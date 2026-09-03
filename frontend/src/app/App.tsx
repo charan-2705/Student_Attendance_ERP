@@ -1,4 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback
+} from 'react';
+
 import {
   Layers,
   Settings,
@@ -16,34 +21,34 @@ import {
 } from 'lucide-react';
 
 import { io } from 'socket.io-client';
-import './App.css';
 
-import NotificationDrawer from './components/NotificationDrawer';
-import AdminPanel from './components/AdminPanel';
-import FacultyPanel from './components/FacultyPanel';
-import StudentPanel from './components/StudentPanel';
+import '../styles/App.css';
+
+import NotificationDrawer from '../components/common/NotificationDrawer';
+import AdminPanel from '../components/admin/AdminPanel';
+import FacultyPanel from '../components/faculty/FacultyPanel';
+import StudentPanel from '../components/student/StudentPanel';
 
 const socket = io('http://localhost:5000', {
   autoConnect: false
 });
 
 export default function App() {
-  // =========================================================
-  // SESSION / LOGIN STATE
-  // =========================================================
-
   const [session, setSession] = useState<any>(null);
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+
   const [loginError, setLoginError] = useState('');
-  const [isDataLoading, setIsDataLoading] = useState(false);
-  const [currentView, setCurrentView] = useState('');
 
-  // =========================================================
-  // PASSWORD VISIBILITY
-  // =========================================================
+  const [isDataLoading, setIsDataLoading] =
+    useState(false);
 
-  const [showLoginPass, setShowLoginPass] = useState(false);
+  const [currentView, setCurrentView] =
+    useState('');
+
+  const [showLoginPass, setShowLoginPass] =
+    useState(false);
 
   const [showProfileCurrentPass, setShowProfileCurrentPass] =
     useState(false);
@@ -54,18 +59,15 @@ export default function App() {
   const [showProfileConfirmPass, setShowProfileConfirmPass] =
     useState(false);
 
-  const [profilePassword, setProfilePassword] = useState({
-    current: '',
-    new: '',
-    confirm: ''
-  });
+  const [profilePassword, setProfilePassword] =
+    useState({
+      current: '',
+      new: '',
+      confirm: ''
+    });
 
   const [isUpdatingPassword, setIsUpdatingPassword] =
     useState(false);
-
-  // =========================================================
-  // ERP DATA
-  // =========================================================
 
   const [dbData, setDbData] = useState<any>({
     subjects: [],
@@ -77,92 +79,114 @@ export default function App() {
     attendanceLogs: []
   });
 
-  // =========================================================
-  // LOGOUT
-  // =========================================================
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem(
+      'erp_session_token'
+    );
 
-  const handleLogout = () => {
-    localStorage.removeItem('erp_session_token');
-    localStorage.removeItem('erp_user_profile');
+    localStorage.removeItem(
+      'erp_user_profile'
+    );
 
     setSession(null);
     setCurrentView('');
 
     socket.disconnect();
-  };
-
-  // =========================================================
-  // RESTORE PREVIOUS SESSION
-  // =========================================================
+  }, []);
 
   useEffect(() => {
     const savedToken =
-      localStorage.getItem('erp_session_token');
+      localStorage.getItem(
+        'erp_session_token'
+      );
 
     const savedUser =
-      localStorage.getItem('erp_user_profile');
+      localStorage.getItem(
+        'erp_user_profile'
+      );
 
     if (savedToken && savedUser) {
       try {
-        const parsedUser = JSON.parse(savedUser);
+        const parsedUser =
+          JSON.parse(savedUser);
 
         setSession(parsedUser);
 
         if (parsedUser.role === 'admin') {
-          setCurrentView('admin-addStudent');
-        } else if (parsedUser.role === 'faculty') {
-          setCurrentView('faculty-mark');
+          setCurrentView(
+            'admin-addStudent'
+          );
+        } else if (
+          parsedUser.role === 'faculty'
+        ) {
+          setCurrentView(
+            'faculty-mark'
+          );
         } else {
-          setCurrentView('student-ai-insights');
+          setCurrentView(
+            'student-ai-insights'
+          );
         }
       } catch (error) {
-        console.error('Failed to restore session:', error);
+        console.error(
+          'Failed to restore session:',
+          error
+        );
 
-        localStorage.removeItem('erp_session_token');
-        localStorage.removeItem('erp_user_profile');
+        localStorage.removeItem(
+          'erp_session_token'
+        );
+
+        localStorage.removeItem(
+          'erp_user_profile'
+        );
       }
     }
   }, []);
 
-  // =========================================================
-  // FETCH ERP DATA
-  // =========================================================
-
-  const fetchERPData = () => {
+  const fetchERPData = useCallback(() => {
     const currentToken =
-      localStorage.getItem('erp_session_token');
+      localStorage.getItem(
+        'erp_session_token'
+      );
 
     if (!currentToken) return;
 
     setIsDataLoading(true);
 
-    fetch('http://localhost:5000/api/dashboard-data', {
-      headers: {
-        Authorization: `Bearer ${currentToken}`
+    fetch(
+      'http://localhost:5000/api/dashboard-data',
+      {
+        headers: {
+          Authorization:
+            `Bearer ${currentToken}`
+        }
       }
-    })
-      .then(res => {
-        if (res.status === 401 || res.status === 403) {
+    )
+      .then((res) => {
+        if (
+          res.status === 401 ||
+          res.status === 403
+        ) {
           handleLogout();
-          throw new Error('Expired session.');
+
+          throw new Error(
+            'Expired session.'
+          );
         }
 
         return res.json();
       })
-      .then(data => {
+      .then((data) => {
         setDbData(data);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error(err);
       })
       .finally(() => {
         setIsDataLoading(false);
       });
-  };
-
-  // =========================================================
-  // SOCKET / REAL-TIME UPDATES
-  // =========================================================
+  }, [handleLogout]);
 
   useEffect(() => {
     if (!session) return;
@@ -171,59 +195,77 @@ export default function App() {
 
     socket.connect();
 
-    // Register current user with socket server
     socket.emit(
       'register_user',
       session.username
     );
 
-    // New notification
+    const handleNewNotification = (
+      notification: any
+    ) => {
+      alert(
+        `🔔 [${notification.title}]: ${notification.message}`
+      );
+
+      fetchERPData();
+    };
+
+    const handleDashboardMutation = (
+      updatedMetrics: any
+    ) => {
+      setDbData(updatedMetrics);
+    };
+
     socket.on(
       'new_notification',
-      (notification) => {
-        alert(
-          `🔔 [${notification.title}]: ${notification.message}`
-        );
-
-        fetchERPData();
-      }
+      handleNewNotification
     );
 
-    // Dashboard mutation
     socket.on(
       'dashboard_mutation',
-      (updatedMetrics) => {
-        setDbData(updatedMetrics);
-      }
+      handleDashboardMutation
     );
 
     return () => {
-      socket.off('new_notification');
-      socket.off('dashboard_mutation');
+      socket.off(
+        'new_notification',
+        handleNewNotification
+      );
+
+      socket.off(
+        'dashboard_mutation',
+        handleDashboardMutation
+      );
+
       socket.disconnect();
     };
-  }, [session]);
+  }, [
+    session,
+    fetchERPData
+  ]);
 
-  // =========================================================
-  // LOGIN
-  // =========================================================
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = (
+    e: React.FormEvent
+  ) => {
     e.preventDefault();
 
     setLoginError('');
 
-    fetch('http://localhost:5000/api/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        username,
-        password
-      })
-    })
-      .then(res => {
+    fetch(
+      'http://localhost:5000/api/login',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json'
+        },
+        body: JSON.stringify({
+          username,
+          password
+        })
+      }
+    )
+      .then((res) => {
         if (!res.ok) {
           throw new Error(
             'Invalid access parameters.'
@@ -232,8 +274,11 @@ export default function App() {
 
         return res.json();
       })
-      .then(data => {
-        if (data.success && data.token) {
+      .then((data) => {
+        if (
+          data.success &&
+          data.token
+        ) {
           localStorage.setItem(
             'erp_session_token',
             data.token
@@ -246,28 +291,38 @@ export default function App() {
 
           setSession(data.user);
 
-          // Redirect based on role
-          if (data.user.role === 'admin') {
-            setCurrentView('admin-addStudent');
-          } else if (data.user.role === 'faculty') {
-            setCurrentView('faculty-mark');
+          if (
+            data.user.role ===
+            'admin'
+          ) {
+            setCurrentView(
+              'admin-addStudent'
+            );
+          } else if (
+            data.user.role ===
+            'faculty'
+          ) {
+            setCurrentView(
+              'faculty-mark'
+            );
           } else {
-            setCurrentView('student-ai-insights');
+            setCurrentView(
+              'student-ai-insights'
+            );
           }
         } else {
           setLoginError(
-            data.message || 'Login failed.'
+            data.message ||
+              'Login failed.'
           );
         }
       })
-      .catch(err => {
-        setLoginError(err.message);
+      .catch((err) => {
+        setLoginError(
+          err.message
+        );
       });
   };
-
-  // =========================================================
-  // UPDATE PASSWORD
-  // =========================================================
 
   const handleUpdatePassword = (
     e: React.FormEvent
@@ -278,7 +333,10 @@ export default function App() {
       profilePassword.new !==
       profilePassword.confirm
     ) {
-      alert('❌ Passwords do not match.');
+      alert(
+        '❌ Passwords do not match.'
+      );
+
       return;
     }
 
@@ -289,25 +347,34 @@ export default function App() {
       {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type':
+            'application/json',
+
           Authorization:
             `Bearer ${localStorage.getItem(
               'erp_session_token'
             )}`
         },
         body: JSON.stringify({
-          username: session?.username,
+          username:
+            session?.username,
+
           currentPassword:
             profilePassword.current,
+
           newPassword:
             profilePassword.new
         })
       }
     )
-      .then(res => res.json())
-      .then(data => {
+      .then((res) =>
+        res.json()
+      )
+      .then((data) => {
         if (data.success) {
-          alert('🔒 Password updated.');
+          alert(
+            '🔒 Password updated.'
+          );
 
           setProfilePassword({
             current: '',
@@ -320,18 +387,19 @@ export default function App() {
           );
         }
       })
-      .catch(err => {
+      .catch((err) => {
         console.error(err);
-        alert('❌ Failed to update password.');
+
+        alert(
+          '❌ Failed to update password.'
+        );
       })
       .finally(() => {
-        setIsUpdatingPassword(false);
+        setIsUpdatingPassword(
+          false
+        );
       });
   };
-
-  // =========================================================
-  // EXPORT CSV
-  // =========================================================
 
   const exportTableToCSV = (
     datasetType:
@@ -344,7 +412,10 @@ export default function App() {
     const fileName =
       `${datasetType}_report.csv`;
 
-    if (datasetType === 'students') {
+    if (
+      datasetType ===
+      'students'
+    ) {
       csvContent +=
         'Student ID,Full Name,Section\n';
 
@@ -356,11 +427,16 @@ export default function App() {
       );
     }
 
-    if (datasetType === 'attendance') {
+    if (
+      datasetType ===
+      'attendance'
+    ) {
       csvContent +=
         'Student ID,Subject,Date,Status\n';
 
-      if (dbData.attendanceLogs) {
+      if (
+        dbData.attendanceLogs
+      ) {
         dbData.attendanceLogs.forEach(
           (a: any) => {
             csvContent +=
@@ -373,11 +449,16 @@ export default function App() {
       }
     }
 
-    if (datasetType === 'leaves') {
+    if (
+      datasetType ===
+      'leaves'
+    ) {
       csvContent +=
         'Student ID,Reason,Start Date,End Date,Status\n';
 
-      if (dbData.leaveRequests) {
+      if (
+        dbData.leaveRequests
+      ) {
         dbData.leaveRequests.forEach(
           (leave: any) => {
             csvContent +=
@@ -394,15 +475,20 @@ export default function App() {
     const blob = new Blob(
       [csvContent],
       {
-        type: 'text/csv;charset=utf-8;'
+        type:
+          'text/csv;charset=utf-8;'
       }
     );
 
     const url =
-      URL.createObjectURL(blob);
+      URL.createObjectURL(
+        blob
+      );
 
     const link =
-      document.createElement('a');
+      document.createElement(
+        'a'
+      );
 
     link.setAttribute(
       'href',
@@ -414,27 +500,27 @@ export default function App() {
       fileName
     );
 
-    document.body.appendChild(link);
+    document.body.appendChild(
+      link
+    );
 
     link.click();
 
-    document.body.removeChild(link);
+    document.body.removeChild(
+      link
+    );
 
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(
+      url
+    );
   };
-
-  // =========================================================
-  // LOGIN PAGE
-  // =========================================================
 
   if (!session) {
     return (
       <div className="login-page-container">
         <div className="login-card-split">
-
           <div className="login-form-side">
             <div className="login-form-content">
-
               <h2>Login</h2>
 
               {loginError && (
@@ -443,15 +529,23 @@ export default function App() {
                 </div>
               )}
 
-              <form onSubmit={handleLogin}>
-
+              <form
+                onSubmit={
+                  handleLogin
+                }
+              >
                 <div className="input-field-group">
                   <input
                     type="text"
-                    value={username}
-                    onChange={e =>
+                    value={
+                      username
+                    }
+                    onChange={(
+                      e
+                    ) =>
                       setUsername(
-                        e.target.value
+                        e.target
+                          .value
                       )
                     }
                     required
@@ -460,17 +554,21 @@ export default function App() {
                 </div>
 
                 <div className="input-field-group password-toggle-wrapper">
-
                   <input
                     type={
                       showLoginPass
                         ? 'text'
                         : 'password'
                     }
-                    value={password}
-                    onChange={e =>
+                    value={
+                      password
+                    }
+                    onChange={(
+                      e
+                    ) =>
                       setPassword(
-                        e.target.value
+                        e.target
+                          .value
                       )
                     }
                     required
@@ -487,12 +585,15 @@ export default function App() {
                     }
                   >
                     {showLoginPass ? (
-                      <EyeOff size={18} />
+                      <EyeOff
+                        size={18}
+                      />
                     ) : (
-                      <Eye size={18} />
+                      <Eye
+                        size={18}
+                      />
                     )}
                   </button>
-
                 </div>
 
                 <button
@@ -501,50 +602,34 @@ export default function App() {
                 >
                   Login
                 </button>
-
               </form>
-
             </div>
           </div>
 
           <div className="login-banner-side">
             <div className="banner-text-content">
               <h1>
-                Welcome to student portal
+                Welcome to
+                student portal
               </h1>
             </div>
           </div>
-
         </div>
       </div>
     );
   }
 
-  // =========================================================
-  // PENDING LEAVE COUNT
-  // =========================================================
-
   const pendingLeavesCount =
     dbData.leaveRequests.filter(
       (r: any) =>
-        r.status === 'Pending'
+        r.status ===
+        'Pending'
     ).length;
-
-  // =========================================================
-  // MAIN ERP PAGE
-  // =========================================================
 
   return (
     <div className="erp-container">
-
-      {/* =====================================================
-          SIDEBAR
-      ====================================================== */}
-
       <aside className="erp-sidebar">
-
         <div className="erp-logo">
-
           <Layers
             size={28}
             color="#a78bfa"
@@ -553,26 +638,21 @@ export default function App() {
           <h2>
             STUDENT PORTAL
           </h2>
-
         </div>
 
         <nav className="erp-nav">
-
           <div
             style={{
-              display: 'flex',
-              flexDirection: 'column',
+              display:
+                'flex',
+              flexDirection:
+                'column',
               gap: '6px'
             }}
           >
-
-            {/* =================================================
-                STUDENT MENU
-            ================================================= */}
-
-            {session.role === 'student' && (
+            {session.role ===
+              'student' && (
               <>
-
                 <button
                   className={
                     currentView ===
@@ -586,7 +666,10 @@ export default function App() {
                     )
                   }
                 >
-                  <Calendar size={18} />
+                  <Calendar
+                    size={18}
+                  />
+
                   AI Insights
                 </button>
 
@@ -606,6 +689,7 @@ export default function App() {
                   <ClipboardList
                     size={18}
                   />
+
                   Attendance Logs
                 </button>
 
@@ -622,7 +706,10 @@ export default function App() {
                     )
                   }
                 >
-                  <BookOpen size={18} />
+                  <BookOpen
+                    size={18}
+                  />
+
                   Lecture Notes
                 </button>
 
@@ -642,21 +729,15 @@ export default function App() {
                   <ShieldAlert
                     size={18}
                   />
+
                   Leave Operations
                 </button>
-
               </>
             )}
 
-            {/* =================================================
-                FACULTY MENU
-            ================================================= */}
-
-            {session.role === 'faculty' && (
+            {session.role ===
+              'faculty' && (
               <>
-
-                {/* Manual Roll Call */}
-
                 <button
                   className={
                     currentView ===
@@ -670,13 +751,12 @@ export default function App() {
                     )
                   }
                 >
-                  <UserCheck size={18} />
+                  <UserCheck
+                    size={18}
+                  />
+
                   Roll Call
                 </button>
-
-                {/* =================================================
-                    NEW: FACE ATTENDANCE
-                ================================================= */}
 
                 <button
                   className={
@@ -691,11 +771,12 @@ export default function App() {
                     )
                   }
                 >
-                  <ScanFace size={18} />
+                  <ScanFace
+                    size={18}
+                  />
+
                   Face Attendance
                 </button>
-
-                {/* Faculty Leaves */}
 
                 <button
                   className={
@@ -710,11 +791,16 @@ export default function App() {
                     )
                   }
                 >
-                  <FileClock size={18} />
-                  Leaves ({pendingLeavesCount})
-                </button>
+                  <FileClock
+                    size={18}
+                  />
 
-                {/* Publish Notes */}
+                  Leaves (
+                  {
+                    pendingLeavesCount
+                  }
+                  )
+                </button>
 
                 <button
                   className={
@@ -729,22 +815,18 @@ export default function App() {
                     )
                   }
                 >
-                  <BookOpen size={18} />
+                  <BookOpen
+                    size={18}
+                  />
+
                   Publish Notes
                 </button>
-
               </>
             )}
 
-            {/* =================================================
-                ADMIN MENU
-            ================================================= */}
-
-            {session.role === 'admin' && (
+            {session.role ===
+              'admin' && (
               <>
-
-                {/* Onboard Student */}
-
                 <button
                   className={
                     currentView ===
@@ -758,11 +840,12 @@ export default function App() {
                     )
                   }
                 >
-                  <Users size={18} />
+                  <Users
+                    size={18}
+                  />
+
                   Onboard Student
                 </button>
-
-                {/* Add Faculty */}
 
                 <button
                   className={
@@ -777,11 +860,12 @@ export default function App() {
                     )
                   }
                 >
-                  <UserCheck size={18} />
+                  <UserCheck
+                    size={18}
+                  />
+
                   Add Faculty
                 </button>
-
-                {/* Section Allocation */}
 
                 <button
                   className={
@@ -796,76 +880,73 @@ export default function App() {
                     )
                   }
                 >
-                  <Settings size={18} />
+                  <Settings
+                    size={18}
+                  />
+
                   Section Allocation
                 </button>
-
               </>
             )}
-
           </div>
-
-          {/* =================================================
-              BOTTOM MENU
-          ================================================= */}
 
           <div
             style={{
-              display: 'flex',
-              flexDirection: 'column',
+              display:
+                'flex',
+              flexDirection:
+                'column',
               gap: '8px',
-              marginTop: 'auto',
-              paddingBottom: '20px'
+              marginTop:
+                'auto',
+              paddingBottom:
+                '20px'
             }}
           >
-
             <button
               className={`profile-settings-nav-btn ${
-                currentView === 'profile'
+                currentView ===
+                'profile'
                   ? 'active'
                   : ''
               }`}
               onClick={() =>
-                setCurrentView('profile')
+                setCurrentView(
+                  'profile'
+                )
               }
             >
-              <Settings size={18} />
+              <Settings
+                size={18}
+              />
+
               Account Settings
             </button>
 
             <button
               className="logout-btn"
-              onClick={handleLogout}
+              onClick={
+                handleLogout
+              }
             >
               Log Out
             </button>
-
           </div>
-
         </nav>
-
       </aside>
 
-      {/* =====================================================
-          MAIN CONTENT
-      ====================================================== */}
-
       <main className="erp-main">
-
         <header className="erp-header">
-
           <div>
-
             <h1>
-              Welcome, {session.name}
+              Welcome,{' '}
+              {session.name}
             </h1>
 
             <div className="user-profile-badge">
-              ROLE: {
-                session.role.toUpperCase()
-              }
+              ROLE:{' '}
+              {session.role.toUpperCase()}
             </div>
-
           </div>
 
           <NotificationDrawer
@@ -876,123 +957,110 @@ export default function App() {
                 session.role
             }}
           />
-
         </header>
 
-        {/* =================================================
-            LOADING
-        ================================================= */}
-
         {isDataLoading ? (
-
           <div className="loading-container">
-
             <Loader2
               className="animate-spin"
               size={32}
               color="#8b5cf6"
             />
-
           </div>
-
         ) : (
-
           <div className="view-content-wrapper">
-
-            {/* =================================================
-                ADMIN PANEL
-            ================================================= */}
-
             <AdminPanel
               dbData={dbData}
-              currentView={currentView}
-              fetchERPData={fetchERPData}
+              currentView={
+                currentView
+              }
+              fetchERPData={
+                fetchERPData
+              }
               exportTableToCSV={
                 exportTableToCSV
               }
             />
-
-            {/* =================================================
-                FACULTY PANEL
-
-                Important:
-                FacultyPanel must handle:
-
-                faculty-mark
-                faculty-face-attendance
-                faculty-leaves
-                faculty-notes
-            ================================================= */}
 
             <FacultyPanel
               dbData={dbData}
-              currentView={currentView}
-              fetchERPData={fetchERPData}
+              currentView={
+                currentView
+              }
+              fetchERPData={
+                fetchERPData
+              }
               exportTableToCSV={
                 exportTableToCSV
               }
             />
 
-            {/* =================================================
-                STUDENT PANEL
-            ================================================= */}
-
             <StudentPanel
               dbData={dbData}
-              currentView={currentView}
-              session={session}
-              fetchERPData={fetchERPData}
+              currentView={
+                currentView
+              }
+              session={
+                session
+              }
+              fetchERPData={
+                fetchERPData
+              }
             />
 
-            {/* =================================================
-                PROFILE
-            ================================================= */}
-
-            {currentView === 'profile' && (
-
+            {currentView ===
+              'profile' && (
               <div
                 className="animate-fade"
                 style={{
-                  display: 'grid',
+                  display:
+                    'grid',
                   gridTemplateColumns:
                     '1fr 2fr',
                   gap: '24px',
-                  alignItems: 'start'
+                  alignItems:
+                    'start'
                 }}
               >
-
-                {/* Profile Information */}
-
                 <div
                   className="panel"
                   style={{
-                    textAlign: 'center',
-                    padding: '24px'
+                    textAlign:
+                      'center',
+                    padding:
+                      '24px'
                   }}
                 >
-
                   <div
                     style={{
-                      width: '80px',
-                      height: '80px',
-                      borderRadius: '50%',
+                      width:
+                        '80px',
+                      height:
+                        '80px',
+                      borderRadius:
+                        '50%',
                       background:
                         '#f3e8ff',
                       color:
                         '#7c3aed',
-                      display: 'flex',
+                      display:
+                        'flex',
                       alignItems:
                         'center',
                       justifyContent:
                         'center',
                       margin:
                         '0 auto 16px auto',
-                      fontSize: '28px',
-                      fontWeight: 'bold'
+                      fontSize:
+                        '28px',
+                      fontWeight:
+                        'bold'
                     }}
                   >
                     {session.name
-                      .charAt(0)
+                      .charAt(
+                        0
+                      )
                       .toUpperCase()}
                   </div>
 
@@ -1001,34 +1069,36 @@ export default function App() {
                   </h3>
 
                   <p>
-                    @{session.username}
+                    @
+                    {
+                      session.username
+                    }
                   </p>
 
                   <div
                     className="user-profile-badge"
                     style={{
-                      display: 'inline-block',
-                      marginTop: '8px'
+                      display:
+                        'inline-block',
+                      marginTop:
+                        '8px'
                     }}
                   >
-                    ROLE: {
-                      session.role.toUpperCase()
-                    }
+                    ROLE:{' '}
+                    {session.role.toUpperCase()}
                   </div>
-
                 </div>
-
-                {/* Password Update */}
 
                 <div
                   className="panel"
                   style={{
-                    padding: '24px'
+                    padding:
+                      '24px'
                   }}
                 >
-
                   <h3>
-                    Re-Encrypt Security Keys
+                    Re-Encrypt
+                    Security Keys
                   </h3>
 
                   <form
@@ -1036,23 +1106,19 @@ export default function App() {
                       handleUpdatePassword
                     }
                     style={{
-                      display: 'flex',
+                      display:
+                        'flex',
                       flexDirection:
                         'column',
                       gap: '16px'
                     }}
                   >
-
-                    {/* Current Password */}
-
                     <div className="form-group">
-
                       <label>
                         Current Password
                       </label>
 
                       <div className="password-toggle-wrapper">
-
                         <input
                           type={
                             showProfileCurrentPass
@@ -1063,12 +1129,17 @@ export default function App() {
                           value={
                             profilePassword.current
                           }
-                          onChange={e =>
-                            setProfilePassword({
-                              ...profilePassword,
-                              current:
-                                e.target.value
-                            })
+                          onChange={(
+                            e
+                          ) =>
+                            setProfilePassword(
+                              {
+                                ...profilePassword,
+                                current:
+                                  e.target
+                                    .value
+                              }
+                            )
                           }
                         />
 
@@ -1082,26 +1153,28 @@ export default function App() {
                           }
                         >
                           {showProfileCurrentPass ? (
-                            <EyeOff size={16} />
+                            <EyeOff
+                              size={
+                                16
+                              }
+                            />
                           ) : (
-                            <Eye size={16} />
+                            <Eye
+                              size={
+                                16
+                              }
+                            />
                           )}
                         </button>
-
                       </div>
-
                     </div>
 
-                    {/* New Password */}
-
                     <div className="form-group">
-
                       <label>
                         New Password
                       </label>
 
                       <div className="password-toggle-wrapper">
-
                         <input
                           type={
                             showProfileNewPass
@@ -1112,12 +1185,17 @@ export default function App() {
                           value={
                             profilePassword.new
                           }
-                          onChange={e =>
-                            setProfilePassword({
-                              ...profilePassword,
-                              new:
-                                e.target.value
-                            })
+                          onChange={(
+                            e
+                          ) =>
+                            setProfilePassword(
+                              {
+                                ...profilePassword,
+                                new:
+                                  e.target
+                                    .value
+                              }
+                            )
                           }
                         />
 
@@ -1131,26 +1209,28 @@ export default function App() {
                           }
                         >
                           {showProfileNewPass ? (
-                            <EyeOff size={16} />
+                            <EyeOff
+                              size={
+                                16
+                              }
+                            />
                           ) : (
-                            <Eye size={16} />
+                            <Eye
+                              size={
+                                16
+                              }
+                            />
                           )}
                         </button>
-
                       </div>
-
                     </div>
 
-                    {/* Confirm Password */}
-
                     <div className="form-group">
-
                       <label>
                         Confirm Password
                       </label>
 
                       <div className="password-toggle-wrapper">
-
                         <input
                           type={
                             showProfileConfirmPass
@@ -1161,12 +1241,17 @@ export default function App() {
                           value={
                             profilePassword.confirm
                           }
-                          onChange={e =>
-                            setProfilePassword({
-                              ...profilePassword,
-                              confirm:
-                                e.target.value
-                            })
+                          onChange={(
+                            e
+                          ) =>
+                            setProfilePassword(
+                              {
+                                ...profilePassword,
+                                confirm:
+                                  e.target
+                                    .value
+                              }
+                            )
                           }
                         />
 
@@ -1180,14 +1265,20 @@ export default function App() {
                           }
                         >
                           {showProfileConfirmPass ? (
-                            <EyeOff size={16} />
+                            <EyeOff
+                              size={
+                                16
+                              }
+                            />
                           ) : (
-                            <Eye size={16} />
+                            <Eye
+                              size={
+                                16
+                              }
+                            />
                           )}
                         </button>
-
                       </div>
-
                     </div>
 
                     <button
@@ -1201,21 +1292,13 @@ export default function App() {
                         ? 'Updating...'
                         : 'Update Security State'}
                     </button>
-
                   </form>
-
                 </div>
-
               </div>
-
             )}
-
           </div>
-
         )}
-
       </main>
-
     </div>
   );
 }

@@ -282,15 +282,10 @@ router.post(
       // -------------------------------------------------
 
           const recognizedSet = new Set(
-            recognizedStudents.map(id => {
-            const value = String(id).trim();
-
-            // AI returns 101, database uses S101
-             return value.startsWith('S')
-               ? value
-                : `S${value}`;
-             })
-          );
+          recognizedStudents.map(id =>
+            String(id).trim().toUpperCase()
+          )
+        );
 
       const attendanceResults = [];
 

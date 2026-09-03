@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Settings, PlusCircle, Search, Trash2, FileSpreadsheet, Eye, EyeOff, Smartphone } from 'lucide-react';
+import { PlusCircle, Search, Trash2, FileSpreadsheet, Eye, EyeOff, Smartphone } from 'lucide-react';
 
 interface StudentMetadata { id: string; name: string; section: string; email?: string; }
 interface FacultyMember { faculty_id: number; username: string; name: string; }
